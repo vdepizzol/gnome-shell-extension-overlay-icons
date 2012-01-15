@@ -65,11 +65,16 @@ function enable() {
     });
     
     wsWinOverInjections['hide'] = injectToFunction(Workspace.WindowOverlay.prototype, 'hide', function() {
-        this._applicationIconBox.hide();
+        Tweener.addTween(this._applicationIconBox, { time: 0.1,
+                                                     opacity: 0,
+                                                     transition: 'linear' });
     });
     
     wsWinOverInjections['show'] = injectToFunction(Workspace.WindowOverlay.prototype, 'show', function() {
-        this._applicationIconBox.show();
+        this._applicationIconBox.set_opacity(0);
+        Tweener.addTween(this._applicationIconBox, { time: 0.25,
+                                                     opacity: 255,
+                                                     transition: 'linear' });
     });
     
     wsWinOverInjections['_onEnter'] = injectToFunction(Workspace.WindowOverlay.prototype, '_onEnter', function() {
