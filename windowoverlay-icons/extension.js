@@ -8,6 +8,10 @@ const Workspace = imports.ui.workspace;
 
 
 const WINDOWOVERLAY_ICON_SIZE = 140;
+const WINDOWOVERLAY_BOX_SIZE = 160;
+const WINDOWOVERLAY_BOX_SIZE_MIN = 50;
+const WINDOWOVERLAY_BOX_RADIUS = 10;
+const WINDOWOVERLAY_BOX_RADIUS_MIN = 5;
 
 function injectToFunction(parent, name, func) {
     let origin = parent[name];
@@ -40,36 +44,41 @@ function enable() {
     wsWinOverInjections['_onDestroy'] = undefined;
     
     wsWinOverInjections['_init'] = injectToFunction(Workspace.WindowOverlay.prototype, '_init', function(windowClone, parentActor) {
-        let icon = null;
+        this._icon = null;
         
         let tracker = Shell.WindowTracker.get_default();
         let app = tracker.get_window_app(windowClone.metaWindow);
         
         if (app) {
-            icon = app.create_icon_texture(WINDOWOVERLAY_ICON_SIZE);
+            this._icon = app.create_icon_texture(WINDOWOVERLAY_ICON_SIZE);
         }
-        if (!icon) {
-            icon = new St.Icon({ icon_name: 'applications-other',
-                                 icon_type: St.IconType.FULLCOLOR,
-                                 icon_size: WINDOWOVERLAY_ICON_SIZE });
+        if (!this._icon) {
+            this._icon = new St.Icon({ icon_name: 'applications-other',
+                                       icon_type: St.IconType.FULLCOLOR,
+                                       icon_size: WINDOWOVERLAY_ICON_SIZE });
         }
-        icon.width = WINDOWOVERLAY_ICON_SIZE;
-        icon.height = WINDOWOVERLAY_ICON_SIZE;
+        this._icon.width = WINDOWOVERLAY_ICON_SIZE;
+        this._icon.height = WINDOWOVERLAY_ICON_SIZE;
         
         this._applicationIconBox = new St.Bin({ style_class: 'windowoverlay-application-icon-box' });
         this._applicationIconBox.set_opacity(255);
-        this._applicationIconBox.add_actor(icon);
+        this._applicationIconBox.add_actor(this._icon);
         
         createdActors.push(this._applicationIconBox);
         parentActor.add_actor(this._applicationIconBox);
     });
     
     wsWinOverInjections['hide'] = injectToFunction(Workspace.WindowOverlay.prototype, 'hide', function() {
-        this._applicationIconBox.hide();
+        Tweener.addTween(this._applicationIconBox, { time: 0.1,
+                                                     opacity: 0,
+                                                     transition: 'linear' });
     });
     
     wsWinOverInjections['show'] = injectToFunction(Workspace.WindowOverlay.prototype, 'show', function() {
-        this._applicationIconBox.show();
+        this._applicationIconBox.set_opacity(0);
+        Tweener.addTween(this._applicationIconBox, { time: 0.25,
+                                                     opacity: 255,
+                                                     transition: 'linear' });
     });
     
     wsWinOverInjections['_onEnter'] = injectToFunction(Workspace.WindowOverlay.prototype, '_onEnter', function() {
@@ -84,12 +93,31 @@ function enable() {
     });
     
     wsWinOverInjections['updatePositions'] = injectToFunction(Workspace.WindowOverlay.prototype, 'updatePositions', function(cloneX, cloneY, cloneWidth, cloneHeight) {
-        let icon = this._applicationIconBox;
+        let iconBox = this._applicationIconBox;
+        let icon = this._icon;
         
-        let iconX = cloneX + (cloneWidth / 2) - (icon.width / 2);
-        let iconY = cloneY + (cloneHeight / 2) - (icon.height / 2);
+        // Calculate the size of the box to be half the size of the smallest dimension, with max and min values
+        let boxSize = WINDOWOVERLAY_BOX_SIZE;
+        if (cloneWidth < cloneHeight) {
+            boxSize = Math.max(Math.min(cloneWidth / 2, WINDOWOVERLAY_BOX_SIZE), WINDOWOVERLAY_BOX_SIZE_MIN);
+        } else {
+            boxSize = Math.max(Math.min(cloneHeight / 2, WINDOWOVERLAY_BOX_SIZE), WINDOWOVERLAY_BOX_SIZE_MIN);
+        }
         
-        icon.set_position(Math.floor(iconX), Math.floor(iconY));
+        // Set the size of the box and the icon
+        iconBox.width = Math.floor(boxSize);
+        iconBox.height = iconBox.width;
+        icon.width = Math.floor(iconBox.width * WINDOWOVERLAY_ICON_SIZE / WINDOWOVERLAY_BOX_SIZE);
+        icon.height = icon.width;
+        
+        // Set the border radius proportional to the size of the box compared to max and min size
+        let borderRadius = WINDOWOVERLAY_BOX_RADIUS_MIN + ((iconBox.width - WINDOWOVERLAY_BOX_SIZE_MIN) / (WINDOWOVERLAY_BOX_SIZE - WINDOWOVERLAY_BOX_SIZE_MIN)) * (WINDOWOVERLAY_BOX_RADIUS - WINDOWOVERLAY_BOX_RADIUS_MIN);
+        iconBox.set_style('border-radius: ' + Math.floor(borderRadius) + 'px');
+        
+        let iconBoxX = cloneX + (cloneWidth / 2) - (icon.width / 2);
+        let iconBoxY = cloneY + (cloneHeight / 2) - (icon.height / 2);
+        
+        iconBox.set_position(Math.floor(iconBoxX), Math.floor(iconBoxY));
     });
     
     wsWinOverInjections['_onDestroy'] = injectToFunction(Workspace.WindowOverlay.prototype, '_onDestroy', function() {
